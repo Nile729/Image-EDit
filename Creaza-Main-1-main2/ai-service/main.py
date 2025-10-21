@@ -117,9 +117,7 @@ def generate_caption(image_features, max_length=20):
             sequence = np.append(sequence, [[predicted_id]], axis=1)
         
         # Clean up caption
-        final_caption = " ".join(caption).replace("startseq", "").strip()
-        if final_caption:
-            final_caption = final_caption[0].upper() + final_caption[1:].lower() + "."
+        final_caption = " ".join(caption).replace("startseq", "").strip().title()
         return final_caption
         
     except Exception as e:
@@ -140,8 +138,8 @@ def check_lapsrn_model():
     """Check if LapSRN model is available and loadable"""
     global lapsrn_model_loaded
     
-    if cv2 is None:
-        print("❌ OpenCV not available - image enhancement disabled")
+    if cv2 is None or dnn_superres is None:
+        print("❌ OpenCV or dnn_superres not available - image enhancement disabled")
         return False
     
     model_path = "LapSRN_x4.pb"
@@ -152,10 +150,6 @@ def check_lapsrn_model():
         return False
     
     try:
-        if dnn_superres is None:
-            print("❌ OpenCV dnn_superres not available")
-            return False
-            
         # Try to load the model
         sr = dnn_superres.DnnSuperResImpl_create()
         sr.readModel(model_path)
@@ -306,6 +300,10 @@ async def generate_image_caption(file: UploadFile = File(...)):
         caption = generate_caption(image_features)
         caption = caption.replace("startseq", "").replace("endseq", "").strip()
         
+        # Format caption: first letter capital, rest lowercase, add full stop
+        if caption and caption != "Unable to generate caption":
+            caption = caption[0].upper() + caption[1:].lower() + ".".title()
+        
         return {
             "success": True,
             "caption": caption
@@ -356,7 +354,7 @@ def can_use_cuda():
         pass
     return False
 
-def enhance_image_lapsrn(image_data: bytes, target_width: int, target_height: int) -> bytes:
+def enhance_image_lapsrn(image_data: bytes) -> bytes:
     """Enhance image using LapSRN model with exact original logic"""
     MODEL_PATH = "LapSRN_x4.pb"
     MODEL_NAME = 'lapsrn'
@@ -371,6 +369,8 @@ def enhance_image_lapsrn(image_data: bytes, target_width: int, target_height: in
     
     if image is None:
         raise Exception("Could not read image")
+    
+    print(f"🖼️ Original image: {image.shape[1]}x{image.shape[0]} pixels")
     
     # Create SR object
     sr = dnn_superres.DnnSuperResImpl_create()
@@ -399,31 +399,29 @@ def enhance_image_lapsrn(image_data: bytes, target_width: int, target_height: in
         sr.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
         print("⚠️ Using CPU for upscaling.")
     
-    # Memory safety
+    # Memory safety - resize if too large
     h, w = image.shape[:2]
     if w > 400 or h > 400:
         scale_factor = min(400 / w, 400 / h)
         new_w, new_h = int(w * scale_factor), int(h * scale_factor)
         image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        print(f"🔄 Resized for processing: {new_w}x{new_h}")
     
-    # Upscale
+    # Upscale using LapSRN
     try:
         print("⏳ Upscaling... (may take a few seconds on CPU)")
         upscaled = sr.upsample(image)
-        print("✅ Upscaling finished.")
+        print(f"✅ Upscaling finished: {upscaled.shape[1]}x{upscaled.shape[0]}")
     except cv2.error as e:
         raise Exception(f"Upscaling failed: {e}")
     
-    # Resize to target dimensions
-    result = cv2.resize(upscaled, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
-    
     # Encode to bytes
-    _, buffer = cv2.imencode('.png', result)
+    _, buffer = cv2.imencode('.png', upscaled)
     return buffer.tobytes()
 
 @app.post("/enhance-image")
 async def enhance_image(file: UploadFile = File(...)):
-    """Enhance image using PIL upscaling"""
+    """Enhance image using LapSRN 4x super-resolution"""
     
     try:
         print(f"📸 Enhancement request received for file: {file.filename}")
@@ -433,38 +431,36 @@ async def enhance_image(file: UploadFile = File(...)):
         if len(contents) > 5 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Image file too large (max 5MB)")
         
-        # Load image with PIL
-        image = Image.open(io.BytesIO(contents))
-        print(f"🖼️ Original image: {image.size} pixels, mode: {image.mode}")
+        # Check if required libraries are available
+        if cv2 is None or dnn_superres is None:
+            raise HTTPException(status_code=503, detail="OpenCV with dnn_superres not available")
         
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-            print("🔄 Converted to RGB")
+        # Check if LapSRN model is available
+        if not lapsrn_model_loaded:
+            raise HTTPException(status_code=503, detail="LapSRN model not available")
         
-        # 4x upscaling using PIL LANCZOS resampling
-        orig_w, orig_h = image.size
-        new_size = (orig_w * 4, orig_h * 4)
-        print(f"⬆️ Upscaling from {orig_w}x{orig_h} to {new_size[0]}x{new_size[1]}")
+        # Validate image format
+        try:
+            test_img = Image.open(io.BytesIO(contents))
+            test_img.verify()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image format")
         
-        upscaled = image.resize(new_size, Image.LANCZOS)
-        print(f"✅ Upscaling complete: {upscaled.size}")
-        
-        # Resize back to original dimensions
-        final_image = upscaled.resize((orig_w, orig_h), Image.LANCZOS)
-        print(f"🔄 Resized back to original: {final_image.size}")
+        # Use LapSRN for enhancement
+        enhanced_bytes = enhance_image_lapsrn(contents)
         
         # Convert to base64
-        img_buffer = io.BytesIO()
-        final_image.save(img_buffer, format='PNG')
-        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        img_str = base64.b64encode(enhanced_bytes).decode()
         print(f"📤 Base64 encoded, length: {len(img_str)} chars")
         
         return {
             "success": True,
             "image": f"data:image/png;base64,{img_str}",
-            "message": "Image enhanced 4x using LANCZOS"
+            "message": "Image enhanced 4x using LapSRN super-resolution"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Enhancement error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Enhancement failed: {str(e)}")
@@ -547,12 +543,10 @@ if __name__ == "__main__":
     print("   - POST /text-to-image")
     print("   - POST /generate-caption (returns image + caption)")
     print("   - POST /remove-background (rembg background removal)")
-    print("   - POST /enhance-image (4x PIL LANCZOS enhancement with debug logging)")
-    
-    # if lapsrn_model_loaded:
-    #     print("   - POST /enhance-image (LapSRN super-resolution)")
-    # else:
-    #     print("   - POST /enhance-image (DISABLED - model not available)")
+    if lapsrn_model_loaded:
+        print("   - POST /enhance-image (LapSRN 4x super-resolution)")
+    else:
+        print("   - POST /enhance-image (DISABLED - LapSRN model not available)")
     print("Running on http://localhost:8002")
     
     uvicorn.run(app, host="0.0.0.0", port=8002)
