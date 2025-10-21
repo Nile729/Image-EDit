@@ -43,7 +43,7 @@ app.add_middleware(
 
 # Global variables
 HF_API_KEYS = [
-    "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"
+    "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"
 ]
 current_key_index = 0
 HF_MODEL = "black-forest-labs/FLUX.1-schnell"
@@ -58,8 +58,8 @@ def load_caption_model():
     global caption_model, tokenizer, feature_extractor
     try:
         if load_model is not None and VGG16 is not None:
-            caption_model = load_model('model.h5')
-            with open('tokenizer.pkl', 'rb') as f:
+            caption_model = load_model("C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\model.h5")
+            with open("C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\tokenizer.pkl", 'rb') as f:
                 tokenizer = pickle.load(f)
             
             # Load VGG16 feature extractor
@@ -72,60 +72,58 @@ def load_caption_model():
     except Exception as e:
         print(f"Failed to load caption model: {e}")
 
-def preprocess_image_for_caption(image):
+def preprocess_image_for_caption(img):
     """Preprocess image for caption model"""
-    image = image.resize((224, 224))
-    image_array = np.array(image)
-    image_array = np.expand_dims(image_array, axis=0)
-    image_array = preprocess_input(image_array)
-    return image_array
+    try:
+        img = img.resize((224, 224))
+        img_array = np.array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = preprocess_input(img_array)
+        return img_array
+    except Exception as e:
+        print(f"Error preprocessing image: {str(e)}")
+        return None
 
 def extract_features(img_array, feature_extractor):
     """Extract features using VGG16"""
     try:
-        features = feature_extractor.predict(img_array, verbose=0)
+        features = feature_extractor.predict(img_array)
         return features
     except Exception as e:
-        print(f"Error extracting features: {e}")
+        print(f"Error extracting features: {str(e)}")
         return None
 
 def create_initial_sequence():
     """Create initial sequence with start token"""
     return np.array([[1]])
 
-def generate_caption(image_features):
+def generate_caption(image_features, max_length=20):
     """Generate caption from image features"""
-    if caption_model is None or tokenizer is None or feature_extractor is None:
-        return "Caption model not available"
-    
     try:
-        # Create sequence with proper shape (1, 35) - pad with zeros
-        sequence = np.zeros((1, 35))
-        sequence[0, 0] = 1  # Start token
-        
+        sequence = create_initial_sequence()
         caption = []
-        max_length = min(20, 34)  # Leave space for end token
         
-        for i in range(max_length):
-            prediction = caption_model.predict([image_features, sequence], verbose=0)
-            predicted_id = np.argmax(prediction[0, i]) if len(prediction.shape) == 3 else np.argmax(prediction)
+        for _ in range(max_length):
+            prediction = caption_model.predict([image_features, sequence])
+            predicted_id = np.argmax(prediction[0]) if len(prediction.shape) == 2 else np.argmax(prediction)
             
             # Get the word from tokenizer
             word = tokenizer.index_word.get(predicted_id, '<unk>')
             
-            if word == "endseq" or predicted_id == 0:
-                break
+            if word == "endseq":
+                break  # Stop generation when "endseq" is predicted
             
             caption.append(word)
-            if i + 1 < 35:
-                sequence[0, i + 1] = predicted_id
+            sequence = np.append(sequence, [[predicted_id]], axis=1)
         
         # Clean up caption
-        final_caption = " ".join(caption).replace("startseq", "").strip().capitalize()
-        return final_caption if final_caption else "Unable to generate caption"
+        final_caption = " ".join(caption).replace("startseq", "").strip()
+        if final_caption:
+            final_caption = final_caption[0].upper() + final_caption[1:].lower() + "."
+        return final_caption
         
     except Exception as e:
-        print(f"Caption generation error: {e}")
+        print(f"Error generating caption: {str(e)}")
         return "Unable to generate caption"
 
 def get_next_api_key():
@@ -204,8 +202,16 @@ async def model_status():
         },
         "caption_model": {
             "loaded": caption_model is not None,
-            "path": "model.h5",
-            "exists": os.path.exists("model.h5")
+            "path": "C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\model.h5",
+            "exists": os.path.exists("C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\model.h5")
+        },
+        "tokenizer": {
+            "loaded": tokenizer is not None,
+            "path": "C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\tokenizer.pkl",
+            "exists": os.path.exists("C:\\Users\\nilab\\PycharmProjects\\PythonProject1\\tokenizer.pkl")
+        },
+        "feature_extractor": {
+            "loaded": feature_extractor is not None
         },
         "opencv_available": cv2 is not None,
         "rembg_available": remove is not None
@@ -276,48 +282,38 @@ Keep responses concise, practical, and focused on image editing. Provide step-by
         }
 
 @app.post("/generate-caption")
-async def generate_caption_endpoint(file: UploadFile = File(...)):
+async def generate_image_caption(file: UploadFile = File(...)):
     """Generate caption for uploaded image"""
+    if caption_model is None or feature_extractor is None or tokenizer is None:
+        raise HTTPException(status_code=503, detail="Caption model not available")
+    
     try:
-        # Read and process the uploaded image
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
+        # Read and process image
+        image_data = await file.read()
+        image_file = Image.open(io.BytesIO(image_data)).convert("RGB")
         
-        # Convert to RGB if necessary
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        # Preprocess image
+        processed_img = preprocess_image_for_caption(image_file)
+        if processed_img is None:
+            raise HTTPException(status_code=500, detail="Failed to preprocess image")
         
-        # Convert image to base64 for frontend display
-        img_buffer = io.BytesIO()
-        image.save(img_buffer, format='PNG')
-        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        # Extract features
+        image_features = extract_features(processed_img, feature_extractor)
+        if image_features is None:
+            raise HTTPException(status_code=500, detail="Failed to extract image features")
         
-        # Preprocess image for caption model
-        processed_image = preprocess_image_for_caption(image)
-        
-        # Extract features using VGG16
-        if feature_extractor is not None:
-            image_features = extract_features(processed_image, feature_extractor)
-            if image_features is not None:
-                # Generate caption
-                caption = generate_caption(image_features)
-                
-                return {
-                    "success": True,
-                    "caption": caption,
-                    "image": f"data:image/png;base64,{img_str}",
-                    "message": "Caption generated successfully"
-                }
+        # Generate caption
+        caption = generate_caption(image_features)
+        caption = caption.replace("startseq", "").replace("endseq", "").strip()
         
         return {
-            "success": False,
-            "caption": "Feature extraction failed",
-            "message": "Unable to process image"
+            "success": True,
+            "caption": caption
         }
         
     except Exception as e:
-        print(f"Caption error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Caption generation failed: {str(e)}")
+        print(f"Caption generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate caption: {str(e)}")
 
 @app.post("/remove-background")
 async def remove_background_endpoint(file: UploadFile = File(...)):
