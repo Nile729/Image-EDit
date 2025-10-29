@@ -6,7 +6,6 @@ export interface Layer {
   name: string
   visible: boolean
   opacity: number
-  blendMode: string
   imageData?: ImageData
   originalImageData?: ImageData
   filters?: Record<string, number>
@@ -126,9 +125,8 @@ export const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(
           ctx.rotate(transform.rotation * Math.PI / 180)
           ctx.scale(Math.abs(transform.scaleX), Math.abs(transform.scaleY))
           
-          // Apply opacity and blend mode
+          // Apply opacity
           ctx.globalAlpha = activeLayerData.opacity
-          ctx.globalCompositeOperation = activeLayerData.blendMode as GlobalCompositeOperation
           ctx.drawImage(layerCanvas, -layerCanvas.width / 2, -layerCanvas.height / 2)
           
           ctx.restore()
@@ -139,7 +137,6 @@ export const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(
       
       // Reset context settings
       ctx.globalAlpha = 1
-      ctx.globalCompositeOperation = 'source-over'
     }, [layers, activeLayer])
 
     const getMousePos = (e: React.MouseEvent) => {

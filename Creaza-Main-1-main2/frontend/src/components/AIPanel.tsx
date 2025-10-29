@@ -36,6 +36,9 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
   const [captionImage, setCaptionImage] = useState<string | null>(null)
   const [generatedCaption, setGeneratedCaption] = useState<string>('')
   const [captionProcessing, setCaptionProcessing] = useState(false)
+  const [customBgColor, setCustomBgColor] = useState('#FFFFFF')
+  const [customBgImage, setCustomBgImage] = useState<File | null>(null)
+  const [customBgPreview, setCustomBgPreview] = useState<string | null>(null)
 
 
 
@@ -87,7 +90,7 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
     }
   }
 
-  const handleAIProcess = async (type: string, uploadFile?: File) => {
+  const handleAIProcess = async (type: string, uploadFile?: File, customParam?: string) => {
     if (type === 'text-to-image' && !textPrompt.trim()) return
     if (type === 'enhance-image' && !uploadFile && !hasImageContent()) return
     if (type !== 'text-to-image' && type !== 'enhance-image' && !hasImageContent()) return
@@ -121,7 +124,11 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
       } else {
         setProgressMessage('Processing image...')
         setProgress(50)
-        await onAIProcess(type, uploadFile, textPrompt, undefined)
+        if (type === 'custom-background-image') {
+          await onAIProcess(type, uploadFile, customParam, undefined)
+        } else {
+          await onAIProcess(type, uploadFile, customParam || textPrompt, undefined)
+        }
         setProgress(100)
         setProgressMessage('Processing complete!')
         
@@ -168,13 +175,17 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
           <select 
             value={imageSize} 
             onChange={(e) => setImageSize(e.target.value)}
-            className="w-full glass-input px-3 py-2 rounded text-sm"
+            className="w-full text-white px-3 py-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+            style={{
+              backgroundColor: 'rgba(139, 92, 246, 0.3)',
+              border: '1px solid rgba(139, 92, 246, 0.5)'
+            }}
           >
-            <option value="512x512">512x512 (Square)</option>
-            <option value="768x512">768x512 (Landscape)</option>
-            <option value="512x768">512x768 (Portrait)</option>
-            <option value="1024x512">1024x512 (Wide)</option>
-            <option value="512x1024">512x1024 (Tall)</option>
+            <option value="512x512" style={{backgroundColor: '#374151', color: 'white'}}>512x512 (Square)</option>
+            <option value="768x512" style={{backgroundColor: '#374151', color: 'white'}}>768x512 (Landscape)</option>
+            <option value="512x768" style={{backgroundColor: '#374151', color: 'white'}}>512x768 (Portrait)</option>
+            <option value="1024x512" style={{backgroundColor: '#374151', color: 'white'}}>1024x512 (Wide)</option>
+            <option value="512x1024" style={{backgroundColor: '#374151', color: 'white'}}>512x1024 (Tall)</option>
           </select>
         </div>
         <button
@@ -291,6 +302,130 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
             </div>
           </div>
         </button>
+
+        <button
+          onClick={() => handleAIProcess('blur-background')}
+          disabled={!hasImageContent() || isProcessing}
+          className={`w-full glass-button p-3 rounded-lg flex items-center gap-3 transition-all ${
+            !hasImageContent() || isProcessing 
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'hover:bg-white/20'
+          }`}
+        >
+          <Palette className="text-green-400" size={16} />
+          <div className="text-left">
+            <div className="font-medium">AI Background Blur</div>
+            <div className="text-xs text-white/70">
+              {hasImageContent() ? 'Current Image' : ''}
+            </div>
+          </div>
+        </button>
+
+        <div className="glass p-3 rounded-lg border border-orange-400/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Palette className="text-orange-400" size={16} />
+            <span className="font-medium">Custom Background Color</span>
+          </div>
+          <div className="flex items-center gap-3 mb-3">
+            <input
+              type="color"
+              value={customBgColor}
+              onChange={(e) => setCustomBgColor(e.target.value)}
+              className="w-12 h-8 rounded border border-white/20 cursor-pointer"
+              title="Select background color"
+            />
+            <input
+              type="text"
+              value={customBgColor}
+              onChange={(e) => setCustomBgColor(e.target.value)}
+              placeholder="#FFFFFF"
+              className="flex-1 glass-input px-3 py-1 rounded text-sm"
+            />
+          </div>
+          <button
+            onClick={() => handleAIProcess('custom-background', undefined, customBgColor)}
+            disabled={!hasImageContent() || isProcessing}
+            className={`w-full glass-button p-2 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              !hasImageContent() || isProcessing 
+                ? 'opacity-50 cursor-not-allowed' 
+                : 'hover:bg-white/20'
+            }`}
+          >
+            <Palette className="text-orange-400" size={14} />
+            <span className="text-sm font-medium">
+              {hasImageContent() ? 'Apply Background' : 'No image loaded'}
+            </span>
+          </button>
+        </div>
+
+        <div className="glass p-3 rounded-lg border border-cyan-400/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Upload className="text-cyan-400" size={16} />
+            <span className="font-medium">Custom Background Image</span>
+          </div>
+          <button className="w-full mb-3">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  setCustomBgImage(file)
+                  const reader = new FileReader()
+                  reader.onload = (e) => setCustomBgPreview(e.target?.result as string)
+                  reader.readAsDataURL(file)
+                }
+                // Reset input value to allow same file to be selected again
+                e.target.value = ''
+              }}
+              className="hidden"
+              id="bg-image-input"
+            />
+            <label
+              htmlFor="bg-image-input"
+              className="w-full p-2 rounded-lg cursor-pointer flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-cyan-400/50 transition-all font-medium text-white"
+            >
+              <Upload size={14} />
+              Upload Background
+            </label>
+          </button>
+          {customBgPreview && (
+            <div className="glass p-3 rounded-lg border border-cyan-400/30 mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs text-cyan-400">Background Preview:</div>
+                <button
+                  onClick={() => {
+                    setCustomBgImage(null)
+                    setCustomBgPreview(null)
+                  }}
+                  className="text-red-400 hover:text-red-300 transition-colors"
+                  title="Remove background"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <img 
+                src={customBgPreview} 
+                alt="Background preview" 
+                className="w-full max-h-24 object-cover rounded border border-white/20"
+              />
+            </div>
+          )}
+          <button
+            onClick={() => handleAIProcess('custom-background-image', undefined, customBgImage)}
+            disabled={!hasImageContent() || !customBgImage || isProcessing}
+            className={`w-full glass-button p-2 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              !hasImageContent() || !customBgImage || isProcessing 
+                ? 'opacity-50 cursor-not-allowed' 
+                : 'hover:bg-white/20'
+            }`}
+          >
+            <Upload className="text-cyan-400" size={14} />
+            <span className="text-sm font-medium">
+              {!hasImageContent() ? 'No image loaded' : !customBgImage ? 'Apply Background' : 'Apply Background'}
+            </span>
+          </button>
+        </div>
 
 
 

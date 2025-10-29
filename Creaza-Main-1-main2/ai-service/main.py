@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -43,7 +43,7 @@ app.add_middleware(
 
 # Global variables
 HF_API_KEYS = [
-    "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"
+    "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"
 ]
 current_key_index = 0
 HF_MODEL = "black-forest-labs/FLUX.1-schnell"
@@ -181,6 +181,9 @@ class TextToImageRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
 
+class CustomBackgroundRequest(BaseModel):
+    color: str = "#FFFFFF"  # Default white background
+
 @app.get("/")
 async def root():
     return {"message": "Image Editor AI Service", "status": "running"}
@@ -217,7 +220,7 @@ async def chat_with_ai(request: ChatRequest):
     print(f"Received chat request: {request.message}")
     
     try:
-        api_key = "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"
+        api_key = "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"
         model = "nousresearch/deephermes-3-llama-3-8b-preview:free"
         
         system_prompt = """You are an AI assistant specialized in image editing and digital art. You help users with:
@@ -341,6 +344,145 @@ async def remove_background_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Background removal error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")
+
+@app.post("/blur-background")
+async def blur_background_endpoint(file: UploadFile = File(...)):
+    """Blur background of uploaded image using rembg and OpenCV"""
+    try:
+        if remove is None:
+            raise HTTPException(status_code=500, detail="rembg library not available")
+        if cv2 is None:
+            raise HTTPException(status_code=500, detail="OpenCV not available")
+        
+        # Read and process the uploaded image
+        contents = await file.read()
+        input_image = Image.open(io.BytesIO(contents)).convert('RGB')
+        
+        # Get the mask using rembg
+        mask_image = remove(input_image, only_mask=True)
+        
+        # Convert PIL images to OpenCV format
+        original_cv = cv2.cvtColor(np.array(input_image), cv2.COLOR_RGB2BGR)
+        mask_cv = np.array(mask_image)
+        
+        # Create blurred version of original image
+        blurred = cv2.GaussianBlur(original_cv, (51, 51), 0)
+        
+        # Normalize mask to 0-1 range
+        mask_normalized = mask_cv.astype(np.float32) / 255.0
+        mask_3channel = np.stack([mask_normalized] * 3, axis=-1)
+        
+        # Blend original and blurred using mask
+        result = original_cv.astype(np.float32) * mask_3channel + blurred.astype(np.float32) * (1 - mask_3channel)
+        result = result.astype(np.uint8)
+        
+        # Convert back to PIL and then to base64
+        result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+        result_pil = Image.fromarray(result_rgb)
+        
+        img_buffer = io.BytesIO()
+        result_pil.save(img_buffer, format='PNG')
+        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        
+        return {
+            "success": True,
+            "image": f"data:image/png;base64,{img_str}",
+            "message": "Background blurred successfully"
+        }
+        
+    except Exception as e:
+        print(f"Background blur error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Background blur failed: {str(e)}")
+
+@app.post("/custom-background")
+async def custom_background_endpoint(file: UploadFile = File(...), color: str = Form("#FFFFFF")):
+    """Replace background with custom color using rembg"""
+    try:
+        if remove is None:
+            raise HTTPException(status_code=500, detail="rembg library not available")
+        
+        print(f"Received color: {color}")
+        
+        # Read and process the uploaded image
+        contents = await file.read()
+        input_image = Image.open(io.BytesIO(contents)).convert('RGBA')
+        
+        # Remove the background using rembg
+        output_image = remove(input_image)
+        
+        # Parse hex color
+        color_clean = color.lstrip('#')
+        if len(color_clean) != 6:
+            raise HTTPException(status_code=400, detail="Invalid color format. Use hex format like #FF0000")
+        
+        try:
+            r, g, b = tuple(int(color_clean[i:i+2], 16) for i in (0, 2, 4))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid hex color")
+        
+        # Create new image with custom background
+        background = Image.new('RGBA', output_image.size, (r, g, b, 255))
+        result = Image.alpha_composite(background, output_image)
+        result = result.convert('RGB')
+        
+        # Convert result to base64
+        img_buffer = io.BytesIO()
+        result.save(img_buffer, format='PNG')
+        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        
+        return {
+            "success": True,
+            "image": f"data:image/png;base64,{img_str}",
+            "message": f"Background replaced with color {color}"
+        }
+        
+    except Exception as e:
+        print(f"Custom background error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Custom background failed: {str(e)}")
+
+@app.post("/custom-background-image")
+async def custom_background_image_endpoint(
+    file: UploadFile = File(...), 
+    background: UploadFile = File(...)
+):
+    """Replace background with custom uploaded image using rembg"""
+    try:
+        if remove is None:
+            raise HTTPException(status_code=500, detail="rembg library not available")
+        
+        # Read and process the main image
+        contents = await file.read()
+        input_image = Image.open(io.BytesIO(contents)).convert('RGBA')
+        
+        # Read and process the background image
+        bg_contents = await background.read()
+        bg_image = Image.open(io.BytesIO(bg_contents)).convert('RGB')
+        
+        # Remove the background from main image
+        output_image = remove(input_image)
+        
+        # Resize background to match main image size
+        bg_resized = bg_image.resize(output_image.size, Image.Resampling.LANCZOS)
+        bg_rgba = bg_resized.convert('RGBA')
+        
+        # Composite the images
+        result = Image.alpha_composite(bg_rgba, output_image)
+        result = result.convert('RGB')
+        
+        # Convert result to base64
+        img_buffer = io.BytesIO()
+        result.save(img_buffer, format='PNG')
+        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        
+        return {
+            "success": True,
+            "image": f"data:image/png;base64,{img_str}",
+            "message": "Background replaced with custom image"
+        }
+        
+    except Exception as e:
+        print(f"Custom background image error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Custom background image failed: {str(e)}")
 
 def can_use_cuda():
     """Return True if the current OpenCV build supports CUDA DNN target."""
@@ -543,6 +685,9 @@ if __name__ == "__main__":
     print("   - POST /text-to-image")
     print("   - POST /generate-caption (returns image + caption)")
     print("   - POST /remove-background (rembg background removal)")
+    print("   - POST /blur-background (rembg + OpenCV background blur)")
+    print("   - POST /custom-background (rembg + custom color background)")
+    print("   - POST /custom-background-image (rembg + custom image background)")
     if lapsrn_model_loaded:
         print("   - POST /enhance-image (LapSRN 4x super-resolution)")
     else:

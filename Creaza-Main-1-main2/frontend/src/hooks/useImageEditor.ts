@@ -52,7 +52,6 @@ export function useImageEditor() {
       name: `Layer ${layers.length + 1}`,
       visible: true,
       opacity: 1,
-      blendMode: 'normal',
       imageData,
       transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }
     }
@@ -144,7 +143,6 @@ export function useImageEditor() {
               name: file.name,
               visible: true,
               opacity: 1,
-              blendMode: 'normal',
               imageData,
               transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }
             }
@@ -186,7 +184,6 @@ export function useImageEditor() {
     layers.forEach(layer => {
       if (layer.visible && layer.imageData) {
         ctx.globalAlpha = layer.opacity
-        ctx.globalCompositeOperation = layer.blendMode as GlobalCompositeOperation
         
         const tempCanvas = document.createElement('canvas')
         tempCanvas.width = layer.imageData.width
@@ -308,7 +305,6 @@ export function useImageEditor() {
                   name: `Captioned: ${file.name}`,
                   visible: true,
                   opacity: 1,
-                  blendMode: 'normal',
                   imageData,
                   transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }
                 }
@@ -349,11 +345,21 @@ export function useImageEditor() {
         
         const endpoints = {
           'remove-background': '/remove-background',
+          'blur-background': '/blur-background',
+          'custom-background': '/custom-background',
+          'custom-background-image': '/custom-background-image',
           'style-transfer': '/style-transfer',
           'enhance-image': '/enhance-image'
         }
         
 
+        
+        if (type === 'custom-background' && prompt) {
+          formData.append('color', prompt)
+        } else if (type === 'custom-background-image' && prompt) {
+          // prompt contains the background image file for this case
+          formData.append('background', prompt as any)
+        }
         
         response = await fetch(`http://localhost:8002${endpoints[type as keyof typeof endpoints]}`, {
           method: 'POST',
@@ -399,6 +405,24 @@ export function useImageEditor() {
                 const nameWithoutExt = activeLayerData.name.replace(/\.[^/.]+$/, '')
                 layerName = `${nameWithoutExt}_remove_bg`
               }
+            } else if (type === 'blur-background' && activeLayer) {
+              const activeLayerData = layers.find(l => l.id === activeLayer)
+              if (activeLayerData?.name) {
+                const nameWithoutExt = activeLayerData.name.replace(/\.[^/.]+$/, '')
+                layerName = `${nameWithoutExt}_blur_bg`
+              }
+            } else if (type === 'custom-background' && activeLayer) {
+              const activeLayerData = layers.find(l => l.id === activeLayer)
+              if (activeLayerData?.name) {
+                const nameWithoutExt = activeLayerData.name.replace(/\.[^/.]+$/, '')
+                layerName = `${nameWithoutExt}_custom_bg`
+              }
+            } else if (type === 'custom-background-image' && activeLayer) {
+              const activeLayerData = layers.find(l => l.id === activeLayer)
+              if (activeLayerData?.name) {
+                const nameWithoutExt = activeLayerData.name.replace(/\.[^/.]+$/, '')
+                layerName = `${nameWithoutExt}_custom_bg_img`
+              }
             } else if (type === 'enhance-image' && activeLayer) {
               const activeLayerData = layers.find(l => l.id === activeLayer)
               if (activeLayerData?.name) {
@@ -412,7 +436,6 @@ export function useImageEditor() {
               name: layerName,
               visible: true,
               opacity: 1,
-              blendMode: 'normal',
               imageData,
               transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }
             }
@@ -460,7 +483,6 @@ export function useImageEditor() {
           name: file.name,
           visible: true,
           opacity: 1,
-          blendMode: 'normal',
           imageData,
           transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }
         }

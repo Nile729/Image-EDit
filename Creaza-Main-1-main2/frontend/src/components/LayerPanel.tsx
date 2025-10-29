@@ -87,23 +87,7 @@ export function LayerPanel({
               />
             </div>
 
-            {/* Blend Mode */}
-            <select 
-              value={layer.blendMode}
-              onChange={(e) => {
-                onUpdateLayer(layer.id, { blendMode: e.target.value })
-              }}
-              className="w-full glass-input px-2 py-1 text-xs rounded"
-            >
-              <option value="normal">Normal</option>
-              <option value="multiply">Multiply</option>
-              <option value="screen">Screen</option>
-              <option value="overlay">Overlay</option>
-              <option value="soft-light">Soft Light</option>
-              <option value="hard-light">Hard Light</option>
-              <option value="color-dodge">Color Dodge</option>
-              <option value="color-burn">Color Burn</option>
-            </select>
+
 
             {/* Layer reorder buttons */}
             <div className="flex justify-center gap-1 mt-2">
