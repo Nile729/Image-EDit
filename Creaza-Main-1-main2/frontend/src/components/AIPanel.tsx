@@ -198,7 +198,7 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare className="text-green-400" size={18} />
           <label className="block text-sm font-medium">
-            Image Caption Generator
+            Image Captioning
           </label>
         </div>
         

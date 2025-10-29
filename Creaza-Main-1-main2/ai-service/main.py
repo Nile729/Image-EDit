@@ -43,7 +43,7 @@ app.add_middleware(
 
 # Global variables
 HF_API_KEYS = [
-    "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"
+    "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"
 ]
 current_key_index = 0
 HF_MODEL = "black-forest-labs/FLUX.1-schnell"
@@ -217,7 +217,7 @@ async def chat_with_ai(request: ChatRequest):
     print(f"Received chat request: {request.message}")
     
     try:
-        api_key = "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"
+        api_key = "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"
         model = "nousresearch/deephermes-3-llama-3-8b-preview:free"
         
         system_prompt = """You are an AI assistant specialized in image editing and digital art. You help users with:

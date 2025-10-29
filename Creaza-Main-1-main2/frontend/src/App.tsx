@@ -121,13 +121,7 @@ function App() {
             >
               Open Image
             </button>
-            <button
-              onClick={() => setShowChatBot(!showChatBot)}
-              className="glass-button p-2 rounded-lg hover:bg-white/10 transition-colors"
-              title="Chat Assistant"
-            >
-              <MessageCircle className="w-5 h-5" />
-            </button>
+
             <div className="relative">
               <button
                 onClick={(e) => {
