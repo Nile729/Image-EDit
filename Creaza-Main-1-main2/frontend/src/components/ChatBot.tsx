@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { MessageCircle, X, Send } from 'lucide-react'
+import { MessageCircle, X, Send, ChevronDown } from 'lucide-react'
 import axios from 'axios'
 
 interface Message {
@@ -7,6 +7,12 @@ interface Message {
   text: string
   isUser: boolean
   timestamp: Date
+}
+
+interface ChatModel {
+  id: string
+  name: string
+  description: string
 }
 
 interface ChatBotProps {
@@ -27,6 +33,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('llama-4-maverick')
+  const [availableModels, setAvailableModels] = useState<ChatModel[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -36,6 +44,21 @@ export const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    // Load available models on component mount
+    const loadModels = async () => {
+      try {
+        const response = await axios.get(`${AI_SERVICE_URL}/chat/models`)
+        setAvailableModels(response.data.models)
+      } catch (error) {
+        console.error('Failed to load models:', error)
+      }
+    }
+    if (isOpen) {
+      loadModels()
+    }
+  }, [isOpen])
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return
@@ -52,10 +75,22 @@ export const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
     setIsLoading(true)
 
     try {
-      console.log('Sending message:', input)
+      console.log('Sending message:', input, 'with model:', selectedModel)
+      
+      // Build conversation history (exclude system message)
+      const history = []
+      for (let i = 1; i < messages.length - 1; i += 2) {
+        if (i + 1 < messages.length) {
+          history.push({
+            user: messages[i].text,
+            assistant: messages[i + 1].text
+          })
+        }
+      }
+      
       const response = await axios.post(
         `${AI_SERVICE_URL}/chat`,
-        { message: input },
+        { message: input, model: selectedModel, history: history },
         {
           headers: {
             'Content-Type': 'application/json'
@@ -107,17 +142,34 @@ export const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed bottom-4 right-4 w-80 h-96 glass-dark border border-white/20 rounded-lg shadow-xl z-50 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-blue-400" />
-          <span className="font-medium text-white">Editing Assistant</span>
+      <div className="p-3 border-b border-white/10">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-blue-400" />
+            <span className="font-medium text-white">AI Guiding Assistant</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+          >
+            <X className="w-4 h-4 text-gray-400" />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-white/10 rounded transition-colors"
-        >
-          <X className="w-4 h-4 text-gray-400" />
-        </button>
+        {/* Model Selector */}
+        <div className="relative">
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white appearance-none focus:outline-none focus:border-blue-400 cursor-pointer"
+          >
+            {availableModels.map((model) => (
+              <option key={model.id} value={model.id} className="bg-gray-800 text-white">
+                {model.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+        </div>
       </div>
 
       {/* Messages */}
@@ -171,6 +223,10 @@ export const ChatBot: React.FC<ChatBotProps> = ({ isOpen, onClose }) => {
           >
             <Send className="w-4 h-4 text-white" />
           </button>
+        </div>
+        {/* Model indicator */}
+        <div className="mt-1 text-xs text-gray-400">
+          Using: {availableModels.find(m => m.id === selectedModel)?.name || selectedModel}
         </div>
       </div>
     </div>

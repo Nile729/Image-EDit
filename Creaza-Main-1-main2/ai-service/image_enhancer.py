@@ -18,7 +18,7 @@ def can_use_cuda():
 
 def enhance_image_4x(image: np.ndarray, original_size: Tuple[int, int]) -> np.ndarray:
     """Enhance image 4x using exact original code logic"""
-    MODEL_PATH = r'C:\Users\nilab\PycharmProjects\PythonProject1\LapSRN_x4.pb'
+    MODEL_PATH = r'C:\Users\nilab\OneDrive\Desktop\Project25\Image-EDit\Creaza-Main-1-main2\ai-service\Models\LapSRN_x4.pb'
     MODEL_NAME = 'lapsrn'
     SCALE = 4
     
