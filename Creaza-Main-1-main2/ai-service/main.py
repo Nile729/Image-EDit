@@ -36,7 +36,7 @@ app.add_middleware(
 )
 
 # API Keys and Chat Service Configuration
-CHAT_API_KEY = ""
+CHAT_API_KEY = "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"
 
 # Available chat models
 CHAT_MODELS = {

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Tool } from './Toolbar'
+import './ColorPicker.css'
 
 export interface Layer {
   id: string
@@ -443,7 +444,16 @@ export const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(
                     type="color"
                     value={brushColor}
                     onChange={(e) => setBrushColor(e.target.value)}
-                    className="w-8 h-8 rounded"
+                    className="w-8 h-8 rounded-full cursor-pointer"
+                    style={{
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      appearance: 'none',
+                      padding: 0,
+                      border: 'none',
+                      outline: 'none',
+                      backgroundColor: brushColor
+                    }}
                   />
                 </>
               )}
@@ -470,7 +480,16 @@ export const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(
                 type="color"
                 value={brushColor}
                 onChange={(e) => setBrushColor(e.target.value)}
-                className="w-8 h-8 rounded"
+                className="w-8 h-8 rounded-full border-0 cursor-pointer overflow-hidden"
+                style={{
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none',
+                  padding: 0,
+                  border: 'none',
+                  outline: 'none',
+                  backgroundColor: brushColor
+                }}
               />
             </div>
             <div className="flex items-center gap-2">

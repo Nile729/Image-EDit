@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Bot, Scissors, Palette, Sparkles, Upload, Wand2, MessageSquare, X } from 'lucide-react'
+import { Bot, Scissors, Palette, Sparkles, Upload, Wand2, MessageSquare, X, Check, Paintbrush, Layers, Droplet, PaintBucket } from 'lucide-react'
 
 interface AIPanelProps {
   onAIProcess: (type: string, file?: File, prompt?: string, size?: string) => void
@@ -323,25 +323,56 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
 
         <div className="glass p-3 rounded-lg border border-orange-400/20">
           <div className="flex items-center gap-2 mb-3">
-            <Palette className="text-orange-400" size={16} />
-            <span className="font-medium">Custom Background Color</span>
+            <PaintBucket className="text-orange-400" size={16} />
+            <span className="font-medium">Background Color</span>
           </div>
+          
+          {/* Selected Color and Custom Picker */}
           <div className="flex items-center gap-3 mb-3">
-            <input
-              type="color"
-              value={customBgColor}
-              onChange={(e) => setCustomBgColor(e.target.value)}
-              className="w-12 h-8 rounded border border-white/20 cursor-pointer"
-              title="Select background color"
-            />
+            <div className="flex items-center gap-2">
+              <PaintBucket className="text-cyan-400" size={15} />
+              <div 
+                className="w-9 h-9 rounded-full border border-cyan-400 flex-shrink-0 p-0.5"
+              >
+                <div 
+                  className="w-full h-full rounded-full"
+                  style={{ backgroundColor: customBgColor }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative w-8 h-8 flex-shrink-0">
+                <input
+                  type="color"
+                  value={customBgColor}
+                  onChange={(e) => setCustomBgColor(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-full"
+                  title="Edit colors"
+                />
+                <div 
+                  className="w-full h-full rounded-full pointer-events-none transition-transform hover:scale-110"
+                  style={{ 
+                    background: 'conic-gradient(from 0deg, #ff0000 0deg, #ff8000 51deg, #ffff00 102deg, #00ff00 153deg, #00ffff 204deg, #0000ff 255deg, #ff00ff 306deg, #ff0000 360deg)',
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Hex Color Input */}
+          <div className="mb-3">
             <input
               type="text"
               value={customBgColor}
               onChange={(e) => setCustomBgColor(e.target.value)}
               placeholder="#FFFFFF"
-              className="flex-1 glass-input px-3 py-1 rounded text-sm"
+              className="w-full glass-input px-3 py-2 rounded text-sm font-mono"
+              pattern="^#[0-9A-Fa-f]{6}$"
+              title="Enter hex color code (e.g., #FF0000)"
             />
           </div>
+          
           <button
             onClick={() => handleAIProcess('custom-background', undefined, customBgColor)}
             disabled={!hasImageContent() || isProcessing}
@@ -351,9 +382,9 @@ export function AIPanel({ onAIProcess, onImageUpload, activeLayer, layers }: AIP
                 : 'hover:bg-white/20'
             }`}
           >
-            <Palette className="text-orange-400" size={14} />
+            <PaintBucket className="text-orange-400" size={14} />
             <span className="text-sm font-medium">
-              {hasImageContent() ? 'Apply Background' : 'No image loaded'}
+              {hasImageContent() ? 'Apply Background Color' : 'No image loaded'}
             </span>
           </button>
         </div>
